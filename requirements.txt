@@ -1,0 +1,6 @@
+flask
+flask-cors
+face_recognition
+numpy
+psycopg2-binary
+gunicorn
