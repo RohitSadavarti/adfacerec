@@ -1,6 +1,12 @@
 Flask==3.0.0
 flask-cors==4.0.0
-face_recognition==1.3.0
 numpy==1.26.0
 psycopg2-binary==2.9.9
 gunicorn==21.2.0
+# We install the pre-compiled version of dlib
+dlib-bin==19.24.2
+# We install the models manually
+face_recognition_models>=0.3.0
+# Dependencies usually handled by face_recognition
+Pillow
+click>=6.0
