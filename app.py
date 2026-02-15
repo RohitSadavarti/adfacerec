@@ -340,45 +340,50 @@ def student_login():
     conn = get_pg_connection()
     cur = conn.cursor()
     
-    # --- FIX: Changed table name to 'std_user_login' ---
-    cur.execute("""
-        SELECT username 
-        FROM std_user_login 
-        WHERE username = %s AND password_hash = %s
-    """, (username, password))
-    
-    user = cur.fetchone()
-    
-    if user:
-        # 2. Fetch Student Details (Name, Dept, Class) for the Profile
-        # We query the 'students' table using the username (Roll No)
+    # --- FIX IS HERE: Changed 'students_user_login' to 'std_user_login' ---
+    try:
         cur.execute("""
-            SELECT name, department, class 
-            FROM students 
-            WHERE roll_number = %s
-        """, (username,))
-        student_details = cur.fetchone()
+            SELECT username 
+            FROM std_user_login 
+            WHERE username = %s AND password_hash = %s
+        """, (username, password))
         
+        user = cur.fetchone()
+        
+        if user:
+            # Fetch Student Profile
+            cur.execute("""
+                SELECT name, department, class 
+                FROM students 
+                WHERE roll_number = %s
+            """, (username,))
+            student_details = cur.fetchone()
+            
+            cur.close()
+            conn.close()
+            
+            if student_details:
+                return jsonify({
+                    "success": True,
+                    "data": {
+                        "roll_number": username,
+                        "name": student_details[0],
+                        "department": student_details[1],
+                        "class": student_details[2]
+                    }
+                })
+            else:
+                return jsonify({"success": False, "message": "Login successful, but Student Profile not found in 'students' table."}), 404
+                
         cur.close()
         conn.close()
-        
-        if student_details:
-            return jsonify({
-                "success": True,
-                "data": {
-                    "roll_number": username,
-                    "name": student_details[0],
-                    "department": student_details[1],
-                    "class": student_details[2]
-                }
-            })
-        else:
-            return jsonify({"success": False, "message": "Student profile not found"}), 404
-            
-    cur.close()
-    conn.close()
-    return jsonify({"success": False, "message": "Invalid credentials"}), 401
+        return jsonify({"success": False, "message": "Invalid credentials"}), 401
 
+    except Exception as e:
+        # This will print the EXACT error to your Render logs if it crashes again
+        print(f"LOGIN ERROR: {str(e)}")
+        return jsonify({"success": False, "message": f"Server Error: {str(e)}"}), 500
+        
 if __name__ == '__main__':
     # Running locally? Use port 5000.
     # On Render, Gunicorn handles the port.
