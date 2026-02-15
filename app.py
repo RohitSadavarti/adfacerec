@@ -329,6 +329,57 @@ def update_db():
     finally:
         if conn: conn.close()
 
+# Add to app.py
+
+@app.route('/api/student/login', methods=['POST'])
+def student_login():
+    data = request.json
+    username = data.get('username')
+    password = data.get('password')
+    
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    
+    # 1. Check Credentials
+    # Note: In production, verify_password_crypt(password, hash) should be used.
+    # Based on your SQL file, we are checking the table 'students_user_login'
+    cur.execute("""
+        SELECT username 
+        FROM students_user_login 
+        WHERE username = %s AND password_hash = %s
+    """, (username, password))
+    
+    user = cur.fetchone()
+    
+    if user:
+        # 2. Fetch Student Details (Name, Dept, Class) for the Profile
+        cur.execute("""
+            SELECT name, department, class 
+            FROM students 
+            WHERE roll_number = %s
+        """, (username,))
+        student_details = cur.fetchone()
+        
+        cur.close()
+        conn.close()
+        
+        if student_details:
+            return jsonify({
+                "success": True,
+                "data": {
+                    "roll_number": username,
+                    "name": student_details[0],
+                    "department": student_details[1],
+                    "class": student_details[2]
+                }
+            })
+        else:
+            return jsonify({"success": False, "message": "Student profile not found"}), 404
+            
+    cur.close()
+    conn.close()
+    return jsonify({"success": False, "message": "Invalid credentials"}), 401
+
 
 if __name__ == '__main__':
     # Running locally? Use port 5000.
