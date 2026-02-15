@@ -5,9 +5,14 @@ import psycopg2
 import face_recognition
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from geopy.distance import geodesic
 
 app = Flask(__name__)
 CORS(app)  # Enables your Flutter app to talk to this server
+
+# COORDINATES OF YOUR COLLEGE (Example: Mumbai University)
+app.config['COLLEGE_COORDS'] = (19.0760, 72.8777) 
+app.config['GEOFENCE_RADIUS_METERS'] = 200 # Allowed radius
 
 # --- DATABASE CONNECTION ---
 def get_db_connection():
@@ -21,6 +26,89 @@ def get_db_connection():
     return psycopg2.connect(url)
 
 # --- ROUTES ---
+
+@app.route('/api/student/stats', methods=['GET'])
+def get_student_stats():
+    # In production, get student_id from session or token
+    roll_number = request.args.get('roll_number') 
+    
+    if not roll_number:
+        return jsonify({"error": "Roll number required"}), 400
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    
+    # Query 1: Overall Attendance
+    cur.execute("""
+        SELECT 
+            COUNT(*) FILTER (WHERE attendance = 'P') as present,
+            COUNT(*) FILTER (WHERE attendance = 'A') as absent
+        FROM Attendance 
+        WHERE roll_number = %s
+    """, (roll_number,))
+    overall = cur.fetchone()
+    
+    # Query 2: Semester/Subject-wise Breakdown
+    cur.execute("""
+        SELECT 
+            subject,
+            COUNT(*) FILTER (WHERE attendance = 'P') as present,
+            COUNT(*) as total
+        FROM Attendance 
+        WHERE roll_number = %s
+        GROUP BY subject
+    """, (roll_number,))
+    subjects = cur.fetchall()
+    
+    cur.close()
+    conn.close()
+
+    subject_data = []
+    for sub in subjects:
+        # Avoid division by zero
+        pct = (sub[1] / sub[2] * 100) if sub[2] > 0 else 0
+        subject_data.append({
+            "subject": sub[0],
+            "present": sub[1],
+            "total": sub[2],
+            "percentage": round(pct, 1)
+        })
+
+    return jsonify({
+        "overall": {
+            "present": overall[0] or 0,
+            "absent": overall[1] or 0,
+            "total": (overall[0] or 0) + (overall[1] or 0)
+        },
+        "subjects": subject_data
+    })
+
+@app.route('/api/mobile/mark_attendance', methods=['POST'])
+def mobile_mark_attendance():
+    # 1. Check Location First
+    try:
+        student_lat = float(request.form.get('latitude'))
+        student_long = float(request.form.get('longitude'))
+        student_coords = (student_lat, student_long)
+        
+        # Calculate distance
+        distance = geodesic(app.config['COLLEGE_COORDS'], student_coords).meters
+        
+        if distance > app.config['GEOFENCE_RADIUS_METERS']:
+            return jsonify({
+                "match": False, 
+                "message": f"You are {int(distance)}m away. Please be inside college campus."
+            }), 403
+            
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid location data"}), 400
+
+    # 2. If location is OK, proceed with Face Recognition
+    # ... (Paste your existing face recognition logic from the previous turn here) ...
+    
+    # (Existing logic to save to DB goes here)
+    
+    return jsonify({"match": True, "message": "Attendance Marked Successfully!"})
 
 @app.route('/', methods=['GET'])
 def home():
