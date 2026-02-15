@@ -247,5 +247,32 @@ def student_login():
         print(f"LOGIN ERROR: {str(e)}")
         return jsonify({"success": False, "message": f"Server Error: {str(e)}"}), 500
 
+@app.route('/setup_face_table', methods=['GET'])
+def setup_face_table():
+    """
+    Creates the table to store Face Encodings.
+    """
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Create table to link Student ID with their Face Encoding (stored as text/json)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS student_face_data (
+                student_id VARCHAR(50) PRIMARY KEY,
+                face_encoding TEXT NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "message": "Table 'student_face_data' created successfully."})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
