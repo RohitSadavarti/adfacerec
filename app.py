@@ -272,7 +272,74 @@ def setup_face_table():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+@app.route('/update_db', methods=['GET'])
+def update_db():
+    """
+    Scans the 'dataset/' folder, generates vectors, and saves them to Supabase.
+    """
+    dataset_path = "dataset" # Folder must exist in your repo
+    
+    if not os.path.exists(dataset_path):
+        return jsonify({"error": "Dataset folder not found. Please push 'dataset/' to GitHub."}), 404
 
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        added_count = 0
+        errors = []
+        
+        # 1. Loop through Student Folders (e.g., dataset/CS23001)
+        for student_roll_no in os.listdir(dataset_path):
+            student_folder = os.path.join(dataset_path, student_roll_no)
+            
+            if os.path.isdir(student_folder):
+                all_encodings = []
+                
+                # 2. Process all images for this student
+                for filename in os.listdir(student_folder):
+                    if filename.lower().endswith((".jpg", ".png", ".jpeg")):
+                        image_path = os.path.join(student_folder, filename)
+                        try:
+                            # Load image & Generate Vector
+                            image = face_recognition.load_image_file(image_path)
+                            encodings = face_recognition.face_encodings(image)
+                            
+                            if len(encodings) > 0:
+                                all_encodings.append(encodings[0])
+                        except Exception as e:
+                            errors.append(f"Error processing {filename}: {e}")
+
+                # 3. Average the vectors (if multiple images) and Save
+                if len(all_encodings) > 0:
+                    # Calculate mean vector across all images for better accuracy
+                    avg_encoding = np.mean(all_encodings, axis=0).tolist()
+                    
+                    # 4. Insert into Supabase
+                    cur.execute("""
+                        INSERT INTO student_face_data (student_id, face_encoding) 
+                        VALUES (%s, %s)
+                        ON CONFLICT (student_id) 
+                        DO UPDATE SET face_encoding = EXCLUDED.face_encoding;
+                    """, (student_roll_no, json.dumps(avg_encoding)))
+                    
+                    added_count += 1
+                else:
+                    errors.append(f"No faces found for {student_roll_no}")
+        
+        conn.commit()
+        return jsonify({
+            "status": "success",
+            "message": f"Successfully updated vectors for {added_count} students.",
+            "errors": errors
+        })
+
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn: conn.close()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
