@@ -340,12 +340,10 @@ def student_login():
     conn = get_pg_connection()
     cur = conn.cursor()
     
-    # 1. Check Credentials
-    # Note: In production, verify_password_crypt(password, hash) should be used.
-    # Based on your SQL file, we are checking the table 'students_user_login'
+    # --- FIX: Changed table name to 'std_user_login' ---
     cur.execute("""
         SELECT username 
-        FROM students_user_login 
+        FROM std_user_login 
         WHERE username = %s AND password_hash = %s
     """, (username, password))
     
@@ -353,6 +351,7 @@ def student_login():
     
     if user:
         # 2. Fetch Student Details (Name, Dept, Class) for the Profile
+        # We query the 'students' table using the username (Roll No)
         cur.execute("""
             SELECT name, department, class 
             FROM students 
@@ -379,7 +378,6 @@ def student_login():
     cur.close()
     conn.close()
     return jsonify({"success": False, "message": "Invalid credentials"}), 401
-
 
 if __name__ == '__main__':
     # Running locally? Use port 5000.
