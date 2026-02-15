@@ -12,7 +12,7 @@ CORS(app)  # Enables your Flutter app to talk to this server
 
 # COORDINATES OF YOUR COLLEGE (Example: Mumbai University)
 app.config['COLLEGE_COORDS'] = (19.2110, 72.1408) 
-app.config['GEOFENCE_RADIUS_METERS'] = 200 # Allowed radius
+app.config['GEOFENCE_RADIUS_METERS'] = 200000 # Allowed radius
 
 # --- DATABASE CONNECTION ---
 def get_db_connection():
